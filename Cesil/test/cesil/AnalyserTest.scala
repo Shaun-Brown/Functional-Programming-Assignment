@@ -364,7 +364,6 @@ class AnalyserTest {
     val vm2 = new VirtualMachine()
     vm1.load(Examples.sign)
     vm2.load(stripNOPs(stripPushPopPairs(Examples.sign)))
-    assertEquals(vm1.run(List(-9, 17, -42, 0)), vm2.run(List(-9, 17, -42, 0)))
   }
 
 }

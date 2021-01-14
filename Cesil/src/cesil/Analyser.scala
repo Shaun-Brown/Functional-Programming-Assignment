@@ -332,18 +332,13 @@ object Analyser {
     * @return the program with unlabelled PUSH/POP pairs removed and any
     *         labelled PUSH/unlabelled POP pairs replaced by a labelled NOP.
     */
-  def stripPushPopPairs(statements: Statements): Statements = statements
-//  statements match {
-//      case _ if statements.length <= 1 => statements
-//      case _ => {
-//        (statements zip statements.tail).head match {
-//          case (PUSH, POP) =>  stripPushPopPairs(statements.tail.tail)
-//          case (Labelled(lbl, PUSH), POP) => Labelled(lbl,NOP) ++ (stripPushPopPairs(statements.tail.tail))
-//          
-//          case _ => statements.head ++ stripPushPopPairs(statements.tail)
-//        }
-//      }
-//    }
+  def stripPushPopPairs(statements: Statements): Statements =
+  statements match {
+    case List() => List()
+    case (PUSH::POP::rest) => stripPushPopPairs(rest)
+    case (Labelled(x,PUSH)::POP::rest) => (Labelled(x,NOP)::stripPushPopPairs(rest))
+    case x::xs => x::stripPushPopPairs(xs)
+  }
 
   
   /**
@@ -353,9 +348,11 @@ object Analyser {
     * @param statements a program.
     * @return the program with all unlabelled NOPs removed.
     */
-  def stripUnlabelledNOPs(statements: Statements): Statements = {
-    val unlabelled = filterUnlabelled(statements)
-    unlabelled
+  def stripUnlabelledNOPs(statements: Statements): Statements = 
+  statements match {
+    case List() => List()
+    case (NOP::rest) => stripUnlabelledNOPs(rest)
+    case x::xs => x::stripUnlabelledNOPs(xs)
   }
 
 
@@ -442,42 +439,82 @@ object Analyser {
     * @param statements a program.
     * @return a program with the labelled NOPs removed and associated references relabelled.
     */
-  def stripLabelledNOPs(statements: Statements): Statements = statements
-//    statements match {
-//      case _ if statements.length <= 1 => statements
-//      case _ =>
-//        (statements zip statements.tail).head match {
-//          case (Labelled(lbl,NOP),nolblStatement: Unlabelled) => Labelled(lbl,nolblStatement) ++ stripLabelledNOPs(statements.tail.tail)
-//          case (Labelled(lbl,NOP),Labelled(lbl2,nolblStatement:Unlabelled)) => Labelled(lbl2,nolblStatement) ++ stripLabelledNOPs(statements.tail.tail)
-//          case _ => statements.head ++ stripLabelledNOPs(statements.tail)
-//      }
-//    }
+  def stripLabelledNOPs(statements: Statements): Statements =
+  statements match {
+    case List() => List()
+//    case _ if (statements.lastOption == Labelled(x,NOP)) => _::Labelled(x,NOP)
+    //Multiple different approaches I have tried, this is to make sure if the last element is a labelled NOP it doesnt get deleted
+//    case rest::Labelled(x,NOP) => rest::Labelled(x,NOP)
+//    case _ if statements.lastOption == Labelled(x,NOP) => _::Labelled(x,NOP)
+//    case statements if Labelled(x,NOP) = statements.last => statements :: Labelled(x,NOP)
+//    case rest::(NOP:Labelled) => rest::(NOP:Labelled)
+    case rest::x if x.last == Labelled => rest::x
+    case Labelled(x,NOP)::(unlablledStatement:Unlabelled)::rest => Labelled(x,unlablledStatement)::rest
 
-
+    case x::xs => x::stripLabelledNOPs(xs)
+  }  
 
   /**
     * Removes all NOP statements (performing any relabelling that may be needed). This is
     * achieved in two passes: firstly, remove the unlabelled NOPs using [[stripUnlabelledNOPs]];
-    * and then remove the labelled NOPs using [[stripLabelledNOPs]]. This funtion is
+    * and then remove the labelled NOPs using [[stripLabelledNOPs]]. This function is
     * constructed using functional composition.
     */
-  val stripNOPs: Statements => Statements = stripLabelledNOPs _ compose stripUnlabelledNOPs _
+  val stripNOPs: Statements => Statements = stripUnlabelledNOPs _ compose stripLabelledNOPs _ 
 
   def stripAllPushPopPairs(statements: Statements): Statements =
-    throw new Exception("stripAllPushPopPairs - replace this thrown exception with an implementation")
+      statements match {
+        case List() => List()
+        case PUSH::POP::rest => stripAllPushPopPairs(rest)
+        case Labelled(x,PUSH)::Labelled(y,POP)::rest => stripAllPushPopPairs(rest)
+        case Labelled(x,PUSH)::POP::rest => stripAllPushPopPairs(rest)
+        case PUSH::Labelled(y,POP)::rest => stripAllPushPopPairs(rest)
+        case x::xs => x::stripAllPushPopPairs(xs)
+  }
   
   def main(args: Array[String]): Unit = {
-    println(listStatementTypesUsed(List(Labelled("start", IN), Labelled("one", PUSH), Labelled("two", IN),
-      PUSH, Labelled("three", IN), Labelled("four", JINEG("start")), POP, JUMP("three"), OUT, HALT)))
+    
+  val simple0: Statements = List(NOP)
+  val simple1: Statements = List(Labelled("one",NOP))
+  val simple2: Statements = List(NOP, NOP)
+  val simple3: Statements = List(NOP, Labelled("one",NOP))
+  val simple4: Statements = List(Labelled("one",NOP), NOP)
+  val simple5: Statements = List(Labelled("one",NOP), Labelled("two",NOP))
+  val simple6: Statements = List(PUSH, POP)
+  val simple7: Statements = List(PUSH, NOP, POP)
+  val simple8: Statements = List(PUSH, POP, PUSH, POP)
+  val simple9: Statements = List(PUSH, POP, Labelled("seven",PUSH), POP)
+  val simpleA: Statements = List(PUSH, PUSH, POP, POP)
+  val simpleB: Statements = List(PUSH, PUSH, PUSH, POP, POP, POP)
+  val simpleC: Statements = List(PUSH, PUSH, PUSH, POP, POP, NOP, POP)
+  val simpleD: Statements = List(PUSH, POP, Labelled("one",NOP), OUT)
+  val simpleH: Statements = List(HALT)
+  val onlyThreePush: Statements = List(PUSH, PUSH, PUSH)
+  val onlyThreePop: Statements = List(POP, POP, POP)
+  
+  val oneRef: Statements = List(JUMP("one"))
+  val twoRefs: Statements = List(JINEG("two"), JUMP("one"))
+  val threeRefs: Statements = twoRefs ++ List(IN, JIZERO("one"), JINEG("three"), JIPOS("two")) ++ oneRef
+  val labelledOneRef: Statements = List(Labelled("one", JUMP("two")))
+  val labelledTwoRefs: Statements = List(Labelled("one", JUMP("two")), Labelled("two", JUMP("one")))
+  val mixedRefs: Statements = List(Labelled("one", JUMP("two")), JUMP("one"), IN, JINEG("three"))
+  
+  val oneMissingLabel: Statements = List(Labelled("one", JINEG("two")), JUMP("one"), IN, Labelled("two", JINEG("three")))
+  val twoMissingLabels: Statements = List(Labelled("three", IN), JINEG("one"), JIPOS("two"), JUMP("three"))
+  val oneRedundantLabel: Statements = List(Labelled("start", IN), Labelled("one", JUMP("two")), Labelled("two", JUMP("one")))
+  val threeRedundantLabels: Statements = List(Labelled("start", IN), Labelled("one", PUSH), Labelled("two", IN),
+      PUSH, Labelled("three", IN), Labelled("four", JINEG("start")), POP, JUMP("three"), OUT, HALT)
+  val missingLabelRefs: Statements = List()
+  
+    println(stripLabelledNOPs(simple0))
       
-    println(getLabelRefs(List(Labelled("start", IN), Labelled("one", PUSH), Labelled("two", IN),
-      PUSH, Labelled("three", IN), Labelled("four", JINEG("start")), POP, JUMP("three"), OUT, HALT)))
+    println(stripLabelledNOPs(simple1))
       
-    println(redundantLabels(List(Labelled("start", IN), Labelled("one", PUSH), Labelled("two", IN),
-      PUSH, Labelled("three", IN), Labelled("four", JINEG("start")), POP, JUMP("three"), OUT, HALT)))
+    println(stripLabelledNOPs(simple5))
       
-    println(stripLabelledNOPs(List(Labelled("start", IN), Labelled("one", PUSH), Labelled("two", IN),
-      PUSH, Labelled("three", IN), Labelled("four", JINEG("start")), POP, JUMP("three"), OUT, HALT)))
+    println(stripPushPopPairs(simpleA))
+    
+    
   }
 }
 
